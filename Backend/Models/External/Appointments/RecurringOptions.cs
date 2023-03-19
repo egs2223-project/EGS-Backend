@@ -2,7 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace Backend.Models.External
+namespace Backend.Models.External.Appointments
 {
     public class RecurringOptions
     {

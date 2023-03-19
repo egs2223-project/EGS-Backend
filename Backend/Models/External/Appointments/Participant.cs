@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Backend.Models.External
+namespace Backend.Models.External.Appointments
 {
     [JsonConverter(typeof(ParticipantJsonConverter))]
     public class Participant : IEquatable<Participant>
@@ -18,7 +18,7 @@ namespace Backend.Models.External
             ParticipantId = participantId;
         }
 
-        public override bool Equals(object? obj)
+        public override bool Equals(object obj)
         {
             return ParticipantId.Equals(obj);
         }
@@ -28,10 +28,10 @@ namespace Backend.Models.External
             return ParticipantId.GetHashCode();
         }
 
-        public bool Equals(Participant? other)
+        public bool Equals(Participant other)
         {
             if (ReferenceEquals(null, other)) return false;
-            return this.ParticipantId == other.ParticipantId;
+            return ParticipantId == other.ParticipantId;
         }
     }
 

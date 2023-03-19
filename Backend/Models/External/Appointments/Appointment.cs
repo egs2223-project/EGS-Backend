@@ -2,7 +2,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
-namespace Backend.Models.External
+namespace Backend.Models.External.Appointments
 {
     public class Appointment
     {
@@ -41,10 +41,10 @@ namespace Backend.Models.External
         public bool Recurring { get; set; }
 
         [JsonPropertyName("recurring_frequency")]
-        public RecurringOptions? RecurringFrequency { get; set; }
+        public RecurringOptions RecurringFrequency { get; set; }
 
         [JsonPropertyName("participant_ids")]
-        public List<Participant>? Participants { get; set; }
+        public List<Participant> Participants { get; set; }
 
         //public Appointment(long id, string description, DateTime dateTime, string iCalData, AppointmentStatus status, int numParticipants, string location, TimeSpan expectedDuration, bool recurring, RecurringOptions recurringFrequency)
         //{

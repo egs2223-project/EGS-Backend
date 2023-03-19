@@ -1,6 +1,7 @@
 
 using Backend.Models;
-using Backend.Models.External;
+using Backend.Models.External.Appointments;
+using Backend.Models.External.Notifications;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,6 @@ using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using System.Data;
 using System.Dynamic;
-using System.Numerics;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text;
@@ -141,10 +141,10 @@ namespace Backend
     {
         private const string FrontendHomeUrl = "home";
         
-        private const string AuthServiceBaseUrl = "https://google.com";
-        private const string AppointmentServiceBaseUrl = "https://localhost:7012/v1";
-        private const string RTCServiceBaseUrl = "http://localhost:3000";
-        private const string NotificationServiceBaseUrl = "https://localhost";
+        public const string AuthServiceBaseUrl = "https://google.com";
+        public const string AppointmentServiceBaseUrl = "https://localhost:7012/v1";
+        public const string RTCServiceBaseUrl = "http://localhost:3000";
+        public const string NotificationServiceBaseUrl = "http://localhost:3030/v1";
 
         private static ILogger logger = LoggerFactory.Create(builder => builder.AddConsole()
                         .SetMinimumLevel(LogLevel.Debug)).CreateLogger("BackendEndpoints");
@@ -439,9 +439,11 @@ namespace Backend
         /// <returns>A newly created OnlineAppointment</returns>
         /// <response code="201">On a successfull operation</response>
         /// <response code="403">Forbidden</response>
+        /// <response code="404">Doctor not found</response>
         /// <response code="409">The new appointment conflicts with an existing one</response>
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         private static async Task<IResult> PostOnlineAppointment(OnlineAppointment onlineAppointment, HttpContext ctx, ServiceDb db)
@@ -452,6 +454,11 @@ namespace Backend
             if (user is null) return Results.Forbid();
             if (user is Doctor) return Results.Forbid();
             if (user.Id != onlineAppointment.PatientId) return Results.Forbid();
+
+            Patient patient = user as Patient;
+            await db.Patients.Entry(patient).Reference(u => u.Preferences).LoadAsync();
+            Doctor doctor = await db.Doctors.Where(u => u.Id == onlineAppointment.DoctorId).SingleOrDefaultAsync();
+            if (doctor is null) return Results.NotFound("Doctor not found");
 
             onlineAppointment.Id = Guid.Empty;
             Appointment extAppointment = new()
@@ -495,9 +502,12 @@ namespace Backend
             extAppointment = JsonSerializer.Deserialize<Appointment>(response);
 
             onlineAppointment.AppointmentId = extAppointment.Id;
+            onlineAppointment.ICalData = extAppointment.ICalData;
 
             await db.Appointments.AddAsync(onlineAppointment);
             await db.SaveChangesAsync();
+
+            await Notifications.SendAppointmentNotification(patient, doctor, onlineAppointment);
 
             return Results.Created("/", onlineAppointment);
         }

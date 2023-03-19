@@ -1,8 +1,7 @@
-﻿using Backend.Models.External;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
-using static Backend.Models.External.Appointment;
+using static Backend.Models.External.Appointments.Appointment;
 
 namespace Backend.Models
 {

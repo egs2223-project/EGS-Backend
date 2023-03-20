@@ -141,7 +141,7 @@ namespace Backend
     {
         private const string FrontendHomeUrl = "home";
         
-        public const string AuthServiceBaseUrl = "https://google.com";
+        public const string AuthServiceBaseUrl = "http://localhost:5000";
         public const string AppointmentServiceBaseUrl = "https://localhost:7012/v1";
         public const string RTCServiceBaseUrl = "http://localhost:3000";
         public const string NotificationServiceBaseUrl = "http://localhost:3030/v1";
@@ -309,13 +309,13 @@ namespace Backend
             if (name != null) doctors = doctors.Where(d => d.Name == name);
             if (orderId != null) doctors = doctors.Where(d => d.OrderId == orderId);
 
-            if (specialties != null)
+            if (specialties != null && specialties.Length > 0)
             {
                 var specialtiesList = specialties.ToList();
                 doctors = doctors.Where(d => d.Specialties.Any(s => specialtiesList.Contains(s.Specialty)));
             }
 
-            return await doctors.Include(d => d.Specialties).Skip(offset).Take(limit).ToListAsync();
+            return await doctors.Include(d => d.Specialties).OrderBy(d => d.Id).Skip(offset).Take(limit).ToListAsync();
         }
 
         /// <summary>
@@ -507,7 +507,7 @@ namespace Backend
             await db.Appointments.AddAsync(onlineAppointment);
             await db.SaveChangesAsync();
 
-            await Notifications.SendAppointmentNotification(patient, doctor, onlineAppointment);
+            await Notifications.SendNewAppointmentNotification(patient, doctor, onlineAppointment);
 
             return Results.Created("/", onlineAppointment);
         }
@@ -575,16 +575,16 @@ namespace Backend
 
             logger.LogInformation($"GetDoctorOnlineAppointments query returned {appointments.Count()} results");
 
-            foreach (var onlineApp in onlineAppointments)
+            foreach (var onlineApp in onlineAppointments.ToList())
             {
                 var externalApps = appointments.Where(a => a.Id == onlineApp.AppointmentId);
 
-                if (externalApps.Count() != 1)
+                var externalApp = externalApps.FirstOrDefault();
+                if(externalApp == null)
                 {
-                    logger.LogError("Inconsistent data with the appointment service");
+                    onlineAppointments.Remove(onlineApp);
+                    continue;
                 }
-
-                var externalApp = externalApps.First();
 
                 onlineApp.DateTime = externalApp.DateTime;
                 onlineApp.ICalData = externalApp.ICalData;
@@ -607,7 +607,7 @@ namespace Backend
         /// <param name="appointment_id">The id of the appointment to be updated</param>
         /// <param name="inOnlineAppointment">The appointment object</param>
         /// <response code="204">Updated</response>
-        /// <response code="403">Unauthorized</response>
+        /// <response code="403">Forbidden</response>
         /// <response code="404">Not Found</response>
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -620,27 +620,32 @@ namespace Backend
             if (onlineAppointment is null) return Results.NotFound();
 
             string email = ctx.User.FindFirstValue(ClaimTypes.Email);
-            var user = db.Users.Where(u => u.Email == email).SingleOrDefault();
+            var user = await db.Users.Where(u => u.Email == email).SingleOrDefaultAsync();
 
             if (user is null) return Results.Forbid();
 
-            if (user is Doctor d)
-            {
-                if (d.Id != onlineAppointment.DoctorId) return Results.Forbid();
-            }
+            if (user is Doctor d) if (d.Id != onlineAppointment.DoctorId) return Results.Forbid();
             else if ((user as Patient).Id != onlineAppointment.PatientId) return Results.Forbid();
 
-            onlineAppointment.Status = inOnlineAppointment.Status;
-            onlineAppointment.Summary = inOnlineAppointment.Summary;
-
             using HttpClient httpClient = new();
-
             string query = $"{AppointmentServiceBaseUrl}/appointments/{onlineAppointment.AppointmentId}";
 
-            Appointment appointment = await httpClient.GetFromJsonAsync<Appointment>(query);
-            appointment.Status = onlineAppointment.Status;
+            Appointment extAppointment = await httpClient.GetFromJsonAsync<Appointment>(query);
+            if (extAppointment.Status == Appointment.AppointmentStatus.Cancelled) return Results.Forbid();
+            extAppointment.Status = inOnlineAppointment.Status;
 
-            await httpClient.PutAsJsonAsync(query, appointment);
+            await httpClient.PutAsJsonAsync(query, extAppointment);
+            extAppointment = await httpClient.GetFromJsonAsync<Appointment>(query);
+
+            onlineAppointment.ICalData = extAppointment.ICalData;
+            onlineAppointment.Summary = inOnlineAppointment.Summary;
+            if (onlineAppointment.Status != Appointment.AppointmentStatus.Cancelled && inOnlineAppointment.Status == Appointment.AppointmentStatus.Cancelled)
+            {
+                Patient patient = await db.Patients.Where(p => p.Id == onlineAppointment.PatientId).Include(p => p.Preferences).SingleAsync();
+                Doctor doctor = await db.Doctors.Where(d => d.Id == onlineAppointment.DoctorId).SingleAsync();
+                await Notifications.SendCancelledAppointmentNotifiaction(patient, doctor, onlineAppointment);
+            }
+            onlineAppointment.Status = extAppointment.Status;
 
             await db.SaveChangesAsync();
 

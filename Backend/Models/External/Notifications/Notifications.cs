@@ -4,7 +4,7 @@ namespace Backend.Models.External.Notifications
 {
     public static class Notifications
     {
-        public static async Task SendAppointmentNotification(Patient patient, Doctor doctor, OnlineAppointment appointment)
+        private static async Task SendAppointmentNotification(string message, Patient patient, Doctor doctor, OnlineAppointment appointment)
         {
             using HttpClient httpClient = new();
 
@@ -15,7 +15,7 @@ namespace Backend.Models.External.Notifications
                 SmsNotification smsNotification = new()
                 {
                     SendTo = patient.PhoneNumber,
-                    MsgBody = $"MediCall24: We're confirming your online doctor's appointment at {appointment.DateTime:dddd, dd MMMM yyyy} with Dr. {doctor.Name}"
+                    MsgBody = message
                 };
 
                 var response = await httpClient.PostAsJsonAsync(query, smsNotification);
@@ -30,7 +30,7 @@ namespace Backend.Models.External.Notifications
                 {
                     SendTo = patient.Email,
                     Subject = "MediCall24 | Appointments",
-                    Text = $"We're confirming your online doctor's appointment at {appointment.DateTime:dddd, dd MMMM yyyy} with Dr. {doctor.Name}",
+                    Text = message,
                     Html = "<p><\\p>",
                     Attachments = new EmailAttachment[] 
                     { 
@@ -46,6 +46,20 @@ namespace Backend.Models.External.Notifications
                 var response = await httpClient.PostAsJsonAsync(query, emailNotification);
                 //Console.WriteLine(await response.Content.ReadAsStringAsync());
             }
+        }
+
+        public static async Task SendNewAppointmentNotification(Patient patient, Doctor doctor, OnlineAppointment appointment)
+        {
+            string not = $"We're confirming your online doctor's appointment at {appointment.DateTime:dddd, dd MMMM yyyy} with Dr. {doctor.Name}";
+
+            await SendAppointmentNotification(not, patient, doctor, appointment);
+        }
+
+        public static async Task SendCancelledAppointmentNotifiaction(Patient patient, Doctor doctor, OnlineAppointment appointment)
+        {
+            string not = $"Your online doctor's appointment at {appointment.DateTime:dddd, dd MMMM yyyy} with Dr. {doctor.Name} has been cancelled";
+
+            await SendAppointmentNotification(not, patient, doctor, appointment);
         }
     }
 }

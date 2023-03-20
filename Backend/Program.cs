@@ -89,6 +89,19 @@ namespace Backend
                             context.Response.Headers.Add("Token-Expired", "true");
                         }
                         return Task.CompletedTask;
+                    },
+
+                    OnMessageReceived = context =>
+                    {
+                        if (context.Request.Cookies.ContainsKey("jwt"))
+                        {
+                            context.Token = context.Request.Cookies["jwt"];
+                        }
+                        else
+                        {
+                            context.Token = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+                        }
+                        return Task.CompletedTask;
                     }
                 };
             });

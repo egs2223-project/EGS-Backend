@@ -11,6 +11,7 @@ using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using System.Data;
 using System.Dynamic;
+using System.Net;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text;
@@ -315,7 +316,17 @@ namespace Backend
                 doctors = doctors.Where(d => d.Specialties.Any(s => specialtiesList.Contains(s.Specialty)));
             }
 
-            return await doctors.Include(d => d.Specialties).OrderBy(d => d.Id).Skip(offset).Take(limit).ToListAsync();
+            var results = await doctors.Include(d => d.Specialties).OrderBy(d => d.Id).Skip(offset).Take(limit).ToListAsync();
+            results.ForEach((d) =>
+            {
+                d.Address = "[REDACTED]";
+                d.City = "[REDACTED]";
+                d.PostalCode = "[REDACTED]";
+                d.PhoneNumber = "[REDACTED]";
+                d.Email = "[REDACTED]";
+            });
+
+            return results;
         }
 
         /// <summary>
@@ -494,7 +505,7 @@ namespace Backend
 
             response = await resp.Content.ReadAsStringAsync();
 
-            if (resp.StatusCode != System.Net.HttpStatusCode.Created)
+            if (resp.StatusCode != HttpStatusCode.Created)
             {
                 return Results.Conflict();
             }
@@ -592,7 +603,15 @@ namespace Backend
                 onlineApp.ExpectedDuration = externalApp.ExpectedDuration;
             }
 
-            if(status != null) onlineAppointments = onlineAppointments.Where(a => a.Status == status).ToList();
+            if (status != null) onlineAppointments = onlineAppointments.Where(a => a.Status == status).ToList();
+            if (doctor && user.Id != participant_id) onlineAppointments.ForEach((a) =>
+            {
+                a.PatientId = Guid.Empty;
+                a.ICalData = "REDACTED";
+                a.Summary = "REDACTED";
+                a.Reason = "REDACTED";
+                a.SessionUrl = "REDACTED";
+            });
 
             return Results.Ok(onlineAppointments);
         }

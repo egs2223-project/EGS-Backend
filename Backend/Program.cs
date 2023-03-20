@@ -12,6 +12,7 @@ using Microsoft.OpenApi.Models;
 using System.Data;
 using System.Dynamic;
 using System.Net;
+using System.Numerics;
 using System.Reflection;
 using System.Security.Claims;
 using System.Text;
@@ -303,6 +304,7 @@ namespace Backend
         /// <response code="200">On a successfull operation</response>
         /// <response code="403">Forbidden</response>
         /// <response code="400">Bad Request</response>
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         private static async Task<ICollection<Doctor>> GetDoctorSearch(ServiceDb db, [FromQuery] DoctorSpecialtyEnum[]? specialties, string? name, string? orderId, int limit = 50, int offset = 0)
         {
             var doctors = db.Doctors.AsQueryable();
@@ -341,10 +343,26 @@ namespace Backend
         /// <response code="403">Forbidden</response>
         /// <response code="404">Not Found</response>
         [ProducesResponseType(typeof(Doctor), StatusCodes.Status200OK)]
-        private static async Task<IResult> GetDoctorId(Guid doctor_id, ServiceDb db)
+        private static async Task<IResult> GetDoctorId(Guid doctor_id, HttpContext ctx, ServiceDb db)
         {
-            return await db.Doctors.Where(d => d.Id == doctor_id).Include(d => d.Specialties).SingleOrDefaultAsync()
-                       is Doctor doctor ? Results.Ok(doctor) : Results.NotFound();
+            var doctor = await db.Doctors.Where(p => p.Id == doctor_id).Include(d => d.Specialties).SingleOrDefaultAsync();
+            if (doctor is null) return Results.NotFound();
+
+            string email = ctx.User.FindFirstValue(ClaimTypes.Email);
+            var user = await db.Users.Where(u => u.Email == email).SingleOrDefaultAsync();
+            if (user is null) return Results.NotFound();
+            if (user is Doctor d && doctor.Id != d.Id) return Results.Forbid();
+
+            if (user is Patient p)
+            {
+                doctor.Address = "[REDACTED]";
+                doctor.City = "[REDACTED]";
+                doctor.PostalCode = "[REDACTED]";
+                doctor.PhoneNumber = "[REDACTED]";
+                doctor.Email = "[REDACTED]";
+            }
+
+            return Results.Ok(doctor);
         }
 
         /// <summary>
@@ -397,10 +415,27 @@ namespace Backend
         /// <response code="200">On a successfull operation</response>
         /// <response code="403">Forbidden</response>
         /// <response code="404">Not Found</response>
-        private static async Task<IResult> GetPatient(Guid patient_id, ServiceDb db)
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        private static async Task<IResult> GetPatient(Guid patient_id, HttpContext ctx, ServiceDb db)
         {
-            return (await db.Patients.Where(p => p.Id == patient_id).Include(i => i.Preferences).ToListAsync()).FirstOrDefault()
-                   is Patient patient ? Results.Ok(patient) : Results.NotFound();
+            var patient = await db.Patients.Where(p => p.Id == patient_id).Include(i => i.Preferences).SingleOrDefaultAsync();
+            if (patient is null) return Results.NotFound();
+
+            string email = ctx.User.FindFirstValue(ClaimTypes.Email);
+            var user = await db.Users.Where(u => u.Email == email).SingleOrDefaultAsync();
+            if (user is null) return Results.NotFound();
+            if (user is Patient p && patient.Id != p.Id) return Results.Forbid();
+
+            if (user is Doctor d)
+            {
+                patient.Address = "[REDACTED]";
+                patient.City = "[REDACTED]";
+                patient.PostalCode = "[REDACTED]";
+                patient.PhoneNumber = "[REDACTED]";
+                patient.Email = "[REDACTED]";
+            }
+
+            return Results.Ok(patient);
         }
 
         /// <summary>

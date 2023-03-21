@@ -141,24 +141,25 @@ namespace Backend
         }
     }
 
-    // example token format 
-    //{
-    //  "sub": "1234567890",
-    //  "email": "test@test.com",
-    //  "name": "John Doe",
-    //  "iat": 1516239022,
-    //  "exp": 2016239022,
-    //  "aud": "https://localhost:7000/",
-    //  "iss": "https://localhost:7000/"
-    //}
+    /* example token format 
+    {
+      "sub": "1234567890",
+      "email": "patient@example.com",
+      "name": "John Doe",
+      "iat": 1516239022,
+      "exp": 2016239022,
+      "aud": "https://localhost:7000/",
+      "iss": "https://localhost:7000/"
+    }
+    */
 
     public static class BackendEndpoints
     {
-        private const string FrontendHomeUrl = "home";
+        private const string FrontendHomeUrl = "http://localhost:3000";
         
         public const string AuthServiceBaseUrl = "http://localhost:5000";
         public const string AppointmentServiceBaseUrl = "https://localhost:7012/v1";
-        public const string RTCServiceBaseUrl = "http://localhost:3000";
+        public const string RTCServiceBaseUrl = "http://localhost:3300";
         public const string NotificationServiceBaseUrl = "http://localhost:3030/v1";
 
         private static ILogger logger = LoggerFactory.Create(builder => builder.AddConsole()
@@ -192,7 +193,7 @@ namespace Backend
         [ProducesResponseType(302)]
         private static void GetLogin(HttpContext ctx)
         {
-            ctx.Response.Redirect($"{AuthServiceBaseUrl}/redirect_url={FrontendHomeUrl}");
+            ctx.Response.Redirect($"{AuthServiceBaseUrl}/login?redirect_url={FrontendHomeUrl}");
         }
 
         /// <summary>
@@ -626,7 +627,7 @@ namespace Backend
 
             string query = $"{AppointmentServiceBaseUrl}/appointments?participant_id={participant_id}&limit={limit}&offset={offset}";
             if (from.HasValue) query += $"&from={from.Value:O}";
-            if (to.HasValue) query += $"&to={from.Value:O}";
+            if (to.HasValue) query += $"&to={to.Value:O}";
 
             logger.LogInformation($"GetDoctorOnlineAppointments calling: {query}");
 

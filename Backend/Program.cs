@@ -206,7 +206,7 @@ namespace Backend
         /// Returns either a Doctor or Patient user object
         /// </remarks>
         /// <response code="200">Ok</response>
-        /// <response code="403">Not authorized</response>
+        /// <response code="401">Not authorized</response>
         /// <response code="404">Not registered. You probably should</response>
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -530,7 +530,7 @@ namespace Backend
                 RecurringFrequency = null,
                 Location = "Online",
                 Participants = new() { new(onlineAppointment.DoctorId), new(onlineAppointment.PatientId) },
-                Description = "Online Appointment between a Doctor and a Patient"
+                Description = $"DocTalk | {onlineAppointment.Specialty} appointment with Dr. {doctor.Name}"
             };
 
             using HttpClient httpClient = new();

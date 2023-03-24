@@ -4,25 +4,26 @@ namespace Backend.Models.External.Notifications
 {
     public class EmailNotification
     {
-        //        { "send_to": "test@test.com", "subject": "Test Subject", "text": "Text", "html": "Html", "attachments": [
-        //         {
-        //           content: "asas".toString("base64"),
-        //           filename: "attachment.pdf",
-        //           type: "application/pdf",
-        //         }
-        //       ] }
+        //{ "sender": "egs-notify@nextechnology.xyz", "recipients": ["test@example.com"], "subject": "Test Subject", 
+        //    "body": `<img alt = "Embedded Image" src="cid:pain.png"/>`, 
+        //    "attachments": [
+        //    {
+        //        "attachment_name": "pain.ics",
+        //        "attachment_data": calendar,
+        //        "attachment_mime": "text/calendar"
+        //    }]
+        //}
+        [JsonPropertyName("sender")]
+        public string Sender { get; set; }
 
-        [JsonPropertyName("send_to")]
-        public string SendTo { get; set; }
+        [JsonPropertyName("recipients")]
+        public string[] Recipients { get; set; }
 
         [JsonPropertyName("subject")]
         public string Subject { get; set; }
 
-        [JsonPropertyName("text")]
-        public string Text { get; set; }
-
-        [JsonPropertyName("html")]
-        public string Html { get; set; }
+        [JsonPropertyName("body")]
+        public string Body { get; set; }
         
         [JsonPropertyName("attachments")]
         public EmailAttachment[] Attachments { get; set; }
@@ -31,13 +32,13 @@ namespace Backend.Models.External.Notifications
 
     public class EmailAttachment
     {
-        [JsonPropertyName("content")]
-        public string Content { get; set; }
+        [JsonPropertyName("attachment_data")]
+        public string AttachmentData { get; set; }
         
-        [JsonPropertyName("filename")]
-        public string Filename { get; set; }
+        [JsonPropertyName("attachment_name")]
+        public string AttachmentName { get; set; }
 
-        [JsonPropertyName("type")]
-        public string Type { get; set; }
+        [JsonPropertyName("attachment_mime")]
+        public string AttachmentMime { get; set; }
     }
 }

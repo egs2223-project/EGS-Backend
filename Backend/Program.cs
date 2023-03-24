@@ -707,6 +707,7 @@ namespace Backend
 
             onlineAppointment.ICalData = extAppointment.ICalData;
             onlineAppointment.Summary = inOnlineAppointment.Summary;
+            onlineAppointment.DateTime = extAppointment.DateTime;
             if (onlineAppointment.Status != Appointment.AppointmentStatus.Cancelled && inOnlineAppointment.Status == Appointment.AppointmentStatus.Cancelled)
             {
                 Patient patient = await db.Patients.Where(p => p.Id == onlineAppointment.PatientId).Include(p => p.Preferences).SingleAsync();

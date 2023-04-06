@@ -66,6 +66,14 @@ namespace Backend
                 });
             });
 
+            builder.Services.AddCors(o => o.AddPolicy("MyPolicy", builder =>
+            {
+                builder.WithOrigins("http://localhost:3000")
+                       .AllowAnyMethod()
+                       .AllowAnyHeader()
+                       .AllowCredentials();
+            }));
+
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
             {
                 options.SaveToken = true;
@@ -124,6 +132,7 @@ namespace Backend
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
             var app = builder.Build();
+            app.UseCors("MyPolicy");
 
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
@@ -692,8 +701,8 @@ namespace Backend
 
             if (user is null) return Results.Forbid();
 
-            if (user is Doctor d) if (d.Id != onlineAppointment.DoctorId) return Results.Forbid();
-            else if ((user as Patient).Id != onlineAppointment.PatientId) return Results.Forbid();
+            if (user is Doctor d) { if (d.Id != onlineAppointment.DoctorId) { return Results.Forbid(); } }
+            else if ((user as Patient).Id != onlineAppointment.PatientId) { return Results.Forbid(); }
 
             using HttpClient httpClient = new();
             string query = $"{AppointmentServiceBaseUrl}/appointments/{onlineAppointment.AppointmentId}";

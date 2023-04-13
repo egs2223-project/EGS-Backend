@@ -22,12 +22,47 @@ namespace Backend
 {
     public class Program
     {
-        public static IConfiguration Configuration;
-
         public static void Main(string[] args)
-        {
+        {            
             var builder = WebApplication.CreateBuilder(args);
-            Configuration = builder.Configuration;
+            string? dbConnStr = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING") != null ?
+                Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING") : builder.Configuration.GetConnectionString("DefaultConnection");
+
+            string? FrontendHomeUrl = Environment.GetEnvironmentVariable("FRONTEND_HOME_URL") != null ?
+                Environment.GetEnvironmentVariable("FRONTEND_HOME_URL") : builder.Configuration["External:Frontend:BaseUrl"];
+            
+            string? AuthServiceBaseUrl = Environment.GetEnvironmentVariable("AUTH_SERVICE_BASE_URL") != null ?
+                Environment.GetEnvironmentVariable("AUTH_SERVICE_BASE_URL") : builder.Configuration["External:AuthService:BaseUrl"];
+            
+            string? AppointmentServiceBaseUrl = Environment.GetEnvironmentVariable("APPOINTMENT_SERVICE_BASE_URL") != null ?
+                Environment.GetEnvironmentVariable("APPOINTMENT_SERVICE_BASE_URL") : builder.Configuration["External:AppointmentService:BaseUrl"];
+
+            Console.WriteLine("AppointmentServiceBaseUrl " + AppointmentServiceBaseUrl);
+            
+            string? RTCServiceBaseUrl = Environment.GetEnvironmentVariable("WEBRTC_SERVICE_BASE_URL") != null ?
+                Environment.GetEnvironmentVariable("WEBRTC_SERVICE_BASE_URL") : builder.Configuration["External:WebRTCService:BaseUrl"];
+            
+            string? NotificationServiceBaseUrl = Environment.GetEnvironmentVariable("NOTIFICATION_SERVICE_BASE_URL") != null ?
+                Environment.GetEnvironmentVariable("NOTIFICATION_SERVICE_BASE_URL") : builder.Configuration["External:NotificationService:BaseUrl"];
+
+            string? AuthServiceJWTKey = Environment.GetEnvironmentVariable("AUTH_SERVICE_JWT_KEY") != null ?
+                Environment.GetEnvironmentVariable("AUTH_SERVICE_JWT_KEY") : builder.Configuration["External:AuthService:Key"];
+
+            string? AuthServiceJWTIssuer = Environment.GetEnvironmentVariable("AUTH_SERVICE_JWT_ISSUER") != null ?
+                Environment.GetEnvironmentVariable("AUTH_SERVICE_JWT_ISSUER") : builder.Configuration["External:AuthService:Issuer"];
+            
+            string? AuthServiceJWTAudience = Environment.GetEnvironmentVariable("AUTH_SERVICE_JWT_AUDIENCE") != null ?
+                Environment.GetEnvironmentVariable("AUTH_SERVICE_JWT_AUDIENCE") : builder.Configuration["External:AuthService:Audience"];
+
+            if(dbConnStr == null) throw new ArgumentNullException("Failed to find a connection string to the Database");
+            if(FrontendHomeUrl == null) throw new ArgumentNullException(nameof(FrontendHomeUrl));
+            if(AuthServiceBaseUrl == null) throw new ArgumentNullException(nameof(AuthServiceBaseUrl));
+            if(AppointmentServiceBaseUrl == null) throw new ArgumentNullException(nameof(AppointmentServiceBaseUrl));
+            if(RTCServiceBaseUrl == null) throw new ArgumentNullException(nameof(RTCServiceBaseUrl));
+            if(NotificationServiceBaseUrl == null) throw new ArgumentNullException(nameof(NotificationServiceBaseUrl));
+            if(AuthServiceJWTKey == null) throw new ArgumentNullException(nameof(AuthServiceJWTKey));
+            if(AuthServiceJWTIssuer == null) throw new ArgumentNullException(nameof(AuthServiceJWTIssuer));
+            if(AuthServiceJWTAudience == null) throw new ArgumentNullException(nameof(AuthServiceJWTAudience));
 
             // Add services to the container.
             builder.Services.AddAuthorization();
@@ -68,7 +103,7 @@ namespace Backend
 
             builder.Services.AddCors(o => o.AddPolicy("MyPolicy", builder =>
             {
-                builder.WithOrigins("http://localhost:3000")
+                builder.WithOrigins(FrontendHomeUrl)
                        .AllowAnyMethod()
                        .AllowAnyHeader()
                        .AllowCredentials();
@@ -83,9 +118,9 @@ namespace Backend
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = builder.Configuration["External:Auth:Issuer"],
-                    ValidAudience = builder.Configuration["External:Auth:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["External:Auth:Key"])),
+                    ValidIssuer = AuthServiceJWTIssuer,
+                    ValidAudience = AuthServiceJWTAudience,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(AuthServiceJWTKey)),
                 };
 
                 options.Events = new JwtBearerEvents
@@ -114,24 +149,22 @@ namespace Backend
                 };
             });
 
-            if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("DefaultConnection")))
+            builder.Services.AddDbContext<ServiceDb>(options =>
             {
-                builder.Services.AddDbContext<ServiceDb>(options =>
+                options.UseSqlServer(dbConnStr, sqlOptions =>
                 {
-                    options.UseInMemoryDatabase("ServiceDb");
+                    sqlOptions.EnableRetryOnFailure();
                 });
-            }
-            else
-            {
-                builder.Services.AddDbContext<ServiceDb>(options =>
-                {
-                    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
-                });            
-            }
+            });
 
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
             var app = builder.Build();
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDb>();
+                db.Database.Migrate();
+            }
             app.UseCors("MyPolicy");
 
             // Configure the HTTP request pipeline.
@@ -141,7 +174,7 @@ namespace Backend
                 app.UseSwaggerUI();
             }
 
-            app.MapBackendRoutes();
+            app.MapBackendRoutes(FrontendHomeUrl, AuthServiceBaseUrl, AppointmentServiceBaseUrl, RTCServiceBaseUrl, NotificationServiceBaseUrl);
 
             app.UseHttpsRedirection();
             app.UseAuthorization();
@@ -164,18 +197,29 @@ namespace Backend
 
     public static class BackendEndpoints
     {
-        private const string FrontendHomeUrl = "http://localhost:3000";
-        
-        public const string AuthServiceBaseUrl = "http://localhost:5000";
-        public const string AppointmentServiceBaseUrl = "https://localhost:7012/v1";
-        public const string RTCServiceBaseUrl = "http://localhost:3300";
-        public const string NotificationServiceBaseUrl = "http://localhost:3030/v1";
+        private static string FrontendHomeUrl = string.Empty;  
+        public static string AuthServiceBaseUrl = string.Empty;
+        public static string AppointmentServiceBaseUrl = string.Empty;
+        public static string RTCServiceBaseUrl = string.Empty;
+        public static string NotificationServiceBaseUrl = string.Empty;
 
         private static ILogger logger = LoggerFactory.Create(builder => builder.AddConsole()
                         .SetMinimumLevel(LogLevel.Debug)).CreateLogger("BackendEndpoints");
 
-        public static void MapBackendRoutes(this IEndpointRouteBuilder app)
+        public static void MapBackendRoutes(this IEndpointRouteBuilder app, 
+                                            string FrontendHomeUrl,
+                                            string AuthServiceBaseUrl,
+                                            string AppointmentServiceBaseUrl,
+                                            string RTCServiceBaseUrl,
+                                            string NotificationServiceBaseUrl
+                                            )
         {
+            BackendEndpoints.FrontendHomeUrl = FrontendHomeUrl;
+            BackendEndpoints.AuthServiceBaseUrl = AuthServiceBaseUrl;
+            BackendEndpoints.AppointmentServiceBaseUrl = AppointmentServiceBaseUrl;
+            BackendEndpoints.RTCServiceBaseUrl = RTCServiceBaseUrl;
+            BackendEndpoints.NotificationServiceBaseUrl = NotificationServiceBaseUrl;
+            
             app.MapGet  ("/v1/login", GetLogin);
 
             app.MapGet  ("/v1/self", GetSelf);

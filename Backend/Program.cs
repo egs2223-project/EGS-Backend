@@ -103,7 +103,7 @@ namespace Backend
 
             builder.Services.AddCors(o => o.AddPolicy("MyPolicy", builder =>
             {
-                builder.WithOrigins(FrontendHomeUrl)
+                builder.WithOrigins(FrontendHomeUrl, FrontendHomeUrl.Replace("http://", "https://"))
                        .AllowAnyMethod()
                        .AllowAnyHeader()
                        .AllowCredentials();
